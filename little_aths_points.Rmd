@@ -269,8 +269,6 @@ total_points <-
 total_points |>
   filter(gender == 'F') |> 
   slice_max(total_points, n = 3) |>  
-  mutate(place = 1:n()) |>
-  select(place, everything()) |> 
   gt()
 ```
 
@@ -279,8 +277,6 @@ total_points |>
 total_points |>
   filter(gender == 'M') |> 
   slice_max(total_points, n = 3) |>  
-  mutate(place = 1:n()) |>
-  select(place, everything()) |> 
   gt()
 ```
 
@@ -350,7 +346,7 @@ centre_records <-
   clean_names() |> 
   mutate(date = dmy(createddatetime)) |> 
   filter(year(date) < 2026) |> 
-  select(date, membername, event = shortname, gender, agegroup, clubname) 
+  select(date, membername, event = shortname, record_value, gender, agegroup, clubname) 
 ```
 
 ## Records 2024 - 2025
@@ -383,7 +379,7 @@ centre_records |>
 ```
 
 # 100% Attendance
-```{r echo=FALSE}
+```{r include=FALSE}
 ##### Check
 # Count up all the events every person has assigned, then ensure everyone has the same
 # number of events for each date
@@ -421,6 +417,8 @@ percent_participaton |>
 
 # Personal Best Awards
 
+Personal best is calculated as (number of PBs) / (number of events competed in). There is a threshold of needing to have competed in at least 50% or more of the events to be eligible.
+
 ```{r}
 pb_awards <-
     aths_data |>
@@ -428,83 +426,38 @@ pb_awards <-
     summarise(pbs = sum(season_pb)) |>
     left_join(percent_participaton, by = c('first_name', 'last_name', 'age', 'gender', 'club')) |>
     mutate(
-        percent_pb_total = pbs / total_events_per_age,
+        percent_competed = events / total_events_per_age,
         percent_pb_competed = pbs / events
     ) |>
-    select(first_name, last_name, gender, age, club, pbs, total_events_per_age, events, percent_pb_total, percent_pb_competed) |>
+    # Must have competed in at least 50% of the events
+    filter(percent_competed >= .5) |> 
+    select(first_name, last_name, gender, age, club, pbs, total_events_per_age, events, percent_competed, percent_pb_competed) |>
     ungroup()
 ```
 
 ## 75% Or More Personal Best
 
-```{r}
+No athletes were 75% or above.
+
+```{r include=FALSE}
 pb_awards |>
-    filter(percent_pb_competed > .75)
+    filter(percent_pb_competed >= .75) |>
+    arrange(desc(percent_pb_competed)) |>
+    mutate(percent_pb_competed = scales::label_percent()(percent_pb_competed)) |> 
+    gt()
 ```
 
 ## 50% Or More Personal Best
 
 ```{r}
 pb_awards |>
-    filter(percent_pb_competed > .5) |>
-    select(first_name, last_name, pbs, total_events_per_age, events_competed = events, percent_pb_competed) |> 
+    filter(percent_pb_competed >= .5) |>
     arrange(desc(percent_pb_competed)) |>
-    mutate(percent_pb_competed = scales::label_percent()(percent_pb_competed)) |> 
+    mutate(
+      percent_competed = scales::label_percent()(percent_competed),
+      percent_pb_competed = scales::label_percent()(percent_pb_competed)
+    ) |> 
     gt()
-```
-
-# Appendix
-
-## Multiple Results Per Event
-
-The following is a list of names, events, and dates where a competitor has mutliple entries. Will need a decision on how to proceed with this:
-
-```{r}
-aths_data |>
-  add_count(date, event_name, first_name, last_name) |>
-  filter(n > 1) |>
-  arrange(date) |>
-  filter(attend == 1) |>
-  select(first_name, last_name, age, gender, date, event_name, position, result) |>
-  gt()
-```
-
-
-
-```{r eval=FALSE, include=FALSE}
-### CHECKS
-non_competition_days <- c(
-  '05 Oct 2024',
-  '20 Oct 2024',
-  '01 Dec 2024',
-  '12 Jan 2025',
-  '19 Jan 2025',
-  '02 Feb 2025',
-  '02 Mar 2025',
-  # This is a competition day but not run yet
-  '15 Mar 2025',
-  '21 Mar 2025',
-  '22 Mar 2025'  
-)
-
-# Confirm all non-competition days have 0 points
-aths_data |>
-  filter(date %in% non_competition_days) |>
-  summarise(
-        pb = sum(season_pb),
-        attendance = sum(attend),
-        place = sum(place),
-        cr = sum(cr)
-    )
-  
-```
-
-
-```{r include=FALSE}
-# Write out raw data
-total_points |>
-    select(first_name, last_name, club, everything()) |> 
-    write.xlsx(file = '2024-2025_Aths_Summary_Data.xlsx')
 ```
 
     
